@@ -653,7 +653,6 @@ public:
         std::uint64_t hidden_bytes = 0;
         read_buffer(reinterpret_cast<std::uint8_t*>(&hidden_bytes), sizeof hidden_bytes);
         std::cout << "total hidden bytes in image: " << hidden_bytes << std::endl;
-        std::cin.get();
 
         std::ofstream writefile02;
         writefile02.open(std::string(filename) + ".copy", std::ios::out | std::ios::binary);
