@@ -515,7 +515,7 @@ public:
         for (unsigned int idx = 0; idx < write_bytes; idx++)
         {
             std::uint8_t c = 0;
-            ss.read(reinterpret_cast<char*>(&c), 1);// std::uint8_t c=buff[idx];
+            ss.read(reinterpret_cast<char*>(&c), 1);
 
             for (int b = 0; b < (8 / lsb_bits); b++)
             {
@@ -532,10 +532,6 @@ public:
                 ++bytes_written;
             }
         }
-        //std::cout << "bytes per char: " << bytes_per_char << std::endl
-        //          << "bytes written: " << bytes_written << std::endl
-        //          << "write bytes from buffer: " << write_bytes << std::endl
-        //          << "filesize: " << filesize << std::endl;
 
         readfile.close();
         writefile.close();
