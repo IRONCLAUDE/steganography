@@ -2,12 +2,11 @@
 #include <string>
 #include <fstream>
 #include <cmath>
-#include <cstdint>
 #include <cstdlib>
 #include <sstream>
 #include <limits>
 #include <cassert>
-
+#include <map>
 
 class hide
 {
@@ -421,6 +420,9 @@ public:
     lsb_write() :hide(true) {}
     lsb_write(std::string out, std::string in) : hide(out, in) {}
 
+    lsb_write(hide& init) :hide(std::move(init)) {}
+
+
     void write(void)
     {
         readfile.seekg(0, readfile.end);
@@ -465,79 +467,6 @@ public:
         writefile.close();
         delete[] buff;
     }
-
-    void write_serial(void)
-    {
-        readfile.seekg(0, readfile.end);
-        fs = readfile.tellg();
-        readfile.seekg(0, readfile.beg);
-        std::uint8_t* buff = new std::uint8_t[fs]();
-        readfile.read(reinterpret_cast<char*>(buff), fs);
-
-        auto filename_size = readfile_name.size();
-        size_t header = sizeof(filename_size) + filename_size + sizeof(std::uint64_t);
-        unsigned int write_bytes = header + fs;//change this//ss.tellp()
-        int lsb_bits = 1;
-        unsigned int bytes_per_char = 8 / lsb_bits, bytes_written = 0;
-
-        std::cout << "write_bytes: " << write_bytes << std::endl;
-        std::cout << "fs: " << fs << std::endl;
-
-        std::uint64_t filesize = fs;
-        if (write_bytes * bytes_per_char > s - of)
-        {
-            std::cout << "image does not have enough writing space" << std::endl;
-            std::cout << "press ENTER if you want to continue " << std::endl;
-            std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
-
-            char inp;
-            std::cin.get(inp);
-            if (inp != '\n')
-                std::exit(EXIT_FAILURE);
-
-            write_bytes = (s - of) / (bytes_per_char);
-            filesize = (s - of - header * bytes_per_char) / bytes_per_char;
-        }
-
-
-        // ss will contain filename and file size of file being written to image
-        std::stringstream ss(std::ios::binary | std::ios::in | std::ios::out);
-        ss.write(reinterpret_cast<char*>(&filename_size), sizeof filename_size);
-        ss << readfile_name;
-        ss.write(reinterpret_cast<char*>(&filesize), sizeof filesize);
-        ss.write(reinterpret_cast<char*>(buff), fs);
-
-        // start writing to image
-        writefile.seekg(of, writefile.beg);
-
-        std::uint8_t mask = static_cast<std::uint8_t>((0b11111111) << (8 - lsb_bits)) >> (8 - lsb_bits);
-
-        for (unsigned int idx = 0; idx < write_bytes; idx++)
-        {
-            std::uint8_t c = 0;
-            ss.read(reinterpret_cast<char*>(&c), 1);
-
-            for (int b = 0; b < (8 / lsb_bits); b++)
-            {
-                //get next byte from the image
-                std::uint8_t bit = (c >> b * lsb_bits) & mask;
-
-                std::uint8_t image_byte;
-                writefile.read(reinterpret_cast<char*>(&image_byte), 1);
-
-                image_byte = (image_byte >> lsb_bits << lsb_bits) + bit;
-
-                writefile.seekp(-1, writefile.cur);
-                writefile.write(reinterpret_cast<char*>(&image_byte), 1);
-                ++bytes_written;
-            }
-        }
-
-        readfile.close();
-        writefile.close();
-        delete[] buff;
-    }
-
 };
 
 
@@ -545,40 +474,15 @@ template<typename P>
 class lsb_read : public hide
 {
 public:
-    //std::string s="1";
     lsb_read() :hide() {}
     lsb_read(std::string s) :hide(s) {}
     lsb_read(std::string out, std::string in) : hide(out, in) {}
 
+
+    lsb_read(hide& init) :hide(std::move(init)) {}
+
+
     static unsigned int lsb_bits;
-
-    bool read_buffer(std::uint8_t* ptr, size_t bytes)
-    {
-        int shift_value = 0; // increases for every byte read
-        std::uint8_t c = 0; // byte written to output file
-
-        std::uint8_t mask = static_cast<std::uint8_t>(0b11111111 << (8 - lsb_bits)) >> (8 - lsb_bits);
-
-        for (unsigned int i = 0; i < bytes * (8 / lsb_bits); i++) // while(!readfile.eof())
-        {   // write byte after 8 bits, then start again
-            std::uint8_t byte = 0; // read bit from file and store in c byte
-            readfile.read(reinterpret_cast<char*>(&byte), sizeof(byte));
-
-            std::uint8_t shifted = (byte & mask) << shift_value;
-            c |= shifted;
-
-            shift_value += lsb_bits;
-
-            if (shift_value >= 8)
-            {
-                *ptr++ = c;
-                c = shift_value = 0;
-            }
-        }
-        return readfile.eof();
-    }
-
-
 
     void read(void)
     {
@@ -623,6 +527,8 @@ public:
         steg_read_bytes(buff, hidden_bytes);
 
         std::ofstream writefile02(std::string(filename) + std::string(".copy"), std::ios::out | std::ios::binary);
+        std::cout << "created file: " << std::string(filename) + std::string(".copy") << std::endl;
+
         if (!writefile02)
         {
             std::cerr << "cannot open file " << filename << std::endl;
@@ -634,44 +540,6 @@ public:
         writefile02.close();
         delete[] filename;
         delete[] buff;
-        std::cin.get();
-    }
-
-
-    void read_serial()
-    {
-        readfile.seekg(of, readfile.beg);
-
-        std::string::size_type outname = 0;
-        read_buffer(reinterpret_cast<std::uint8_t*>(&outname), sizeof outname);
-        std::cout << "hidden  file filename size: " << outname << std::endl;
-
-        char* filename = new char[outname + 1]();
-        read_buffer(reinterpret_cast<std::uint8_t*>(filename), outname);
-        std::cout << "hidden file filename: " << filename << std::endl;
-
-        std::uint64_t hidden_bytes = 0;
-        read_buffer(reinterpret_cast<std::uint8_t*>(&hidden_bytes), sizeof hidden_bytes);
-        std::cout << "total hidden bytes in image: " << hidden_bytes << std::endl;
-
-        std::ofstream writefile02;
-        writefile02.open(std::string(filename) + ".copy", std::ios::out | std::ios::binary);
-        if (!writefile02.good())
-        {
-            std::cerr << "cannot open file " << filename << std::endl;
-            std::exit(EXIT_FAILURE);
-        }
-
-        std::uint8_t* extracted_contents = new std::uint8_t[hidden_bytes]();
-        read_buffer(extracted_contents, hidden_bytes);
-        writefile02.write(reinterpret_cast<char*>(extracted_contents), hidden_bytes);
-
-        readfile.close();
-        writefile02.close();
-        writefile.close();
-
-        delete[] filename;
-        delete[] extracted_contents;
     }
 };
 
@@ -693,14 +561,82 @@ std::ostream& operator << (std::ostream& lhs, const hide& rhs)
     return lhs;
 }
 
-
 int main(int argc, char** argv)
 {
-    lsb_write<bpp32> s;
-    s.write();
+    char c;
+    do
+    {
+        std::cout << "Enter 1 to hide data into padding bytes" << std::endl;
+        std::cout << "Enter 2 to read data from padding bytes" << std::endl;
+        std::cout << "Enter 3 to write data into steganographic bitmap " << std::endl;
+        std::cout << "Enter 4 to read data from steganographic bitmap" << std::endl;
+        std::cout << "Enter 5 to exit" << std::endl;
 
-    lsb_read<bpp32> r;
-    r.read();
+        std::cin >> c;
+        std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+
+        if (c == '1')
+        {
+            hide h(true);
+            h.write();
+        }
+        else if (c == '2')
+        {
+            find f;
+            f.read();
+        }
+        else if (c == '3')
+        {
+            hide h(true);
+
+            if (h.depth() == 32)
+            {
+                lsb_write<bpp32> s(h);
+                s.write();
+            }
+            else if (h.depth() == 24)
+            {
+                lsb_write<bpp24> s(h);
+                s.write();
+            }
+            else if (h.depth() == 16)
+            {
+                lsb_write<bpp16> s(h);
+                s.write();
+            }
+            else
+            {
+                lsb_write<bpp8> s(h);
+                s.write();
+            }
+        }
+        else if (c == '4')
+        {
+            hide f;
+
+            if (f.depth() == 32)
+            {
+                lsb_read<bpp32> s(f);
+                s.read();
+            }
+            else if (f.depth() == 24)
+            {
+                lsb_read<bpp24> s(f);
+                s.read();
+            }
+            else if (f.depth() == 16)
+            {
+                lsb_read<bpp16> s(f);
+                s.read();
+            }
+            else
+            {
+                lsb_read<bpp8> s(f);
+                s.read();
+            }
+        }
+
+    } while (c != '5');
 
     return 0;
 }
