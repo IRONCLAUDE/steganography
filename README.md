@@ -1,4 +1,4 @@
-#### **LSB Steganography CLI Tool**
+#### **LSB Steganography Tool**
 A personal learning C++ project implementing **Least Significant Bit (LSB) steganography** with a simple command-line interface. This tool allows users to hide and retrieve data from bitmap images and their padding bytes.
 
 1. **Hide Data in Padding Bytes**  
